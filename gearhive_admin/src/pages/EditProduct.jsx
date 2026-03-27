@@ -1,194 +1,208 @@
 /* src/pages/EditProduct.jsx */
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import databaseService from '../services/database';
-import { UploadCloud } from 'lucide-react';
-import TempNavbar from '../components/TempNavbar';
+import { UploadCloud, ArrowLeft, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
+
+function Field({ label, htmlFor, children }) {
+  return (
+    <div>
+      <label htmlFor={htmlFor} className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1.5">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+const input = 'w-full border border-stone-200 bg-stone-50 focus:bg-white px-4 py-3 rounded-xl text-sm text-stone-900 placeholder:text-stone-300 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 transition-all';
 
 function EditProduct() {
-    const { slug } = useParams(); // Get the product ID from URL
-    const navigate = useNavigate();
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const [fileName, setFileName] = useState('No new file chosen');
+  const { slug }    = useParams();
+  const navigate    = useNavigate();
+  const [loading,   setLoading]   = useState(false);
+  const [fetching,  setFetching]  = useState(true);
+  const [error,     setError]     = useState('');
+  const [success,   setSuccess]   = useState(false);
+  const [fileName,  setFileName]  = useState('');
 
-    const [formData, setFormData] = useState({
-        name: '',
-        slug: '',
-        description: '',
-        price: '',
-        quantity: 0, 
-        category: 'phones',
-        status: true,
-        image: null,       // For new upload
-        featuredImage: ''  // Stores existing image ID
-    });
+  const [form, setForm] = useState({
+    name: '', slug: '', description: '', price: '', quantity: 0,
+    category: 'phones', status: true, image: null, featuredImage: '',
+  });
 
-    // 1. Fetch existing product data
-    useEffect(() => {
-        if (slug) {
-            databaseService.getProduct(slug).then((post) => {
-                if (post) {
-                    setFormData({
-                        name: post.name,
-                        slug: post.$id, // Document ID
-                        description: post.description,
-                        price: post.price,
-                        quantity: post.quantity,
-                        category: post.category,
-                        status: post.status,
-                        featuredImage: post.featuredImage, 
-                        image: null 
-                    });
-                } else {
-                    navigate('/products');
-                }
-            });
-        }
-    }, [slug, navigate]);
+  useEffect(() => {
+    if (!slug) return;
+    databaseService.getProduct(slug).then((p) => {
+      if (p) {
+        setForm({
+          name: p.name, slug: p.$id, description: p.description,
+          price: p.price, quantity: p.quantity, category: p.category,
+          status: p.status, featuredImage: p.featuredImage, image: null,
+        });
+      } else {
+        navigate('/products');
+      }
+    }).finally(() => setFetching(false));
+  }, [slug, navigate]);
 
-    const handleChange = (e) => {
-        const { name, value, type, checked, files } = e.target;
-        if (type === 'file') {
-            const file = files[0];
-            setFormData({ ...formData, [name]: file });
-            setFileName(file ? file.name : 'No new file chosen');
-        } else if (type === 'checkbox') {
-            setFormData({ ...formData, [name]: checked });
-        } else {
-            setFormData({ ...formData, [name]: value });
-        }
-    };
+  const onChange = (e) => {
+    const { name, value, type, checked, files } = e.target;
+    if (type === 'file') {
+      const file = files[0];
+      setForm((p) => ({ ...p, [name]: file }));
+      setFileName(file?.name ?? '');
+    } else if (type === 'checkbox') {
+      setForm((p) => ({ ...p, [name]: checked }));
+    } else {
+      setForm((p) => ({ ...p, [name]: value }));
+    }
+  };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setLoading(true);
-        setError('');
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      let fileId = form.featuredImage;
+      if (form.image) {
+        const file = await databaseService.uploadFile(form.image);
+        if (file) fileId = file.$id;
+      }
+      const result = await databaseService.updateProduct(slug, {
+        name:          form.name,
+        description:   form.description,
+        price:         parseFloat(form.price),
+        quantity:      parseInt(form.quantity),
+        category:      form.category,
+        status:        form.status,
+        featuredImage: fileId,
+      });
+      if (result) { setSuccess(true); setTimeout(() => navigate('/products'), 1200); }
+    } catch (err) {
+      setError(err.message || 'Update failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        try {
-            // 2. Handle Image: Use new one if uploaded, otherwise keep old one
-            let fileId = formData.featuredImage;
+  if (fetching) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <Loader2 className="animate-spin text-amber-500" size={32} />
+    </div>
+  );
 
-            if (formData.image) {
-                const file = await databaseService.uploadFile(formData.image);
-                if (file) {
-                    fileId = file.$id;
-                    // Optional: Delete old image here if you want to save storage
-                    // await databaseService.deleteFile(formData.featuredImage); 
-                }
-            }
-
-            // 3. Update Product
-            const dbPost = await databaseService.updateProduct(slug, {
-                name: formData.name,
-                description: formData.description,
-                price: parseFloat(formData.price),
-                quantity: parseInt(formData.quantity),
-                category: formData.category,
-                status: formData.status,
-                featuredImage: fileId,
-            });
-
-            if (dbPost) {
-                navigate('/products');
-            }
-        } catch (err) {
-            setError(err.message || "Failed to update product");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const inputClass = "mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 sm:text-sm transition-colors bg-gray-50";
-
-    return (
-        <div className="min-h-screen bg-gray-50">
-            <TempNavbar />
-
-            <div className="flex items-center justify-center p-8">
-                <div className="w-full max-w-4xl bg-white shadow-lg rounded-xl p-10">
-                    <h2 className="text-2xl font-bold mb-8 text-gray-900 border-b pb-4">Edit Product</h2>
-                    
-                    {error && <p className="text-red-500 mb-6 bg-red-50 p-4 rounded-lg border border-red-100">{error}</p>}
-
-                    <form onSubmit={handleSubmit} className="space-y-8">
-                        {/* Read-only ID Display */}
-                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                            <label className="block text-xs font-bold text-blue-500 uppercase">Product ID</label>
-                            <p className="font-mono text-sm text-blue-800">{formData.slug}</p>
-                        </div>
-
-                        <div>
-                            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">Product Name</label>
-                            <input type="text" name="name" id="name" required className={inputClass} value={formData.name} onChange={handleChange} />
-                        </div>
-
-                        <div>
-                            <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                            <textarea name="description" id="description" required rows="4" className={inputClass} value={formData.description} onChange={handleChange}></textarea>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div>
-                                <label htmlFor="price" className="block text-sm font-medium text-gray-700 mb-2">Price ($)</label>
-                                <input type="number" name="price" id="price" required min="0" step="0.01" className={inputClass} value={formData.price} onChange={handleChange} />
-                            </div>
-                            <div>
-                                <label htmlFor="quantity" className="block text-sm font-medium text-gray-700 mb-2">Stock Quantity</label>
-                                <input type="number" name="quantity" id="quantity" required min="0" step="1" className={inputClass} value={formData.quantity} onChange={handleChange} />
-                            </div>
-                            <div>
-                                <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                                <select name="category" id="category" className={inputClass} value={formData.category} onChange={handleChange}>
-                                    <option value="phones">Phones</option>
-                                    <option value="laptops">Laptops</option>
-                                    <option value="audio">Audio</option>
-                                    <option value="wearables">Wearables</option>
-                                    <option value="cameras">Cameras</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Product Image</label>
-                            
-                            {/* Current Image Preview */}
-                            {formData.featuredImage && (
-                                <div className="mb-4 flex items-center gap-4 bg-gray-50 p-3 rounded-lg border border-gray-200">
-                                    <img 
-                                        src={databaseService.getFileView(formData.featuredImage)}
-                                        alt="Current" 
-                                        className="h-16 w-16 object-cover rounded-md border border-gray-300"
-                                    />
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-900">Current Image</p>
-                                        <p className="text-xs text-gray-500">Upload a new file to replace this.</p>
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="flex items-center">
-                                <input type="file" name="image" id="image" accept="image/png, image/jpg, image/jpeg, image/gif" className="hidden" onChange={handleChange} />
-                                <label htmlFor="image" className="cursor-pointer flex items-center gap-2 px-4 py-2 border border-blue-600 rounded-md text-blue-600 font-medium hover:bg-blue-50 transition-colors focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
-                                    <UploadCloud size={20} /> {formData.featuredImage ? "Change File" : "Choose File"}
-                                </label>
-                                <span className="ml-3 text-sm text-gray-500">{fileName}</span>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center">
-                            <input type="checkbox" name="status" id="status" checked={formData.status} onChange={handleChange} className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 transition-colors" />
-                            <label htmlFor="status" className="ml-2 block text-sm font-medium text-gray-900 select-none">Active (Visible in Store)</label>
-                        </div>
-
-                        <button type="submit" disabled={loading} className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-base font-semibold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all ${loading ? 'opacity-70 cursor-not-allowed' : 'hover:shadow-md'}`}>
-                            {loading ? "Updating..." : "Update Product"}
-                        </button>
-                    </form>
-                </div>
-            </div>
+  if (success) return (
+    <div className="min-h-screen flex items-center justify-center bg-[#f8f7f4]">
+      <div className="bg-white rounded-3xl border border-stone-100 p-10 text-center max-w-sm w-full">
+        <div className="h-14 w-14 rounded-2xl bg-emerald-100 flex items-center justify-center mx-auto mb-4">
+          <CheckCircle size={28} className="text-emerald-600" />
         </div>
-    );
+        <h2 className="text-xl font-bold text-stone-900 mb-1" style={{ fontFamily: 'Syne, sans-serif' }}>Product updated!</h2>
+        <p className="text-stone-400 text-sm">Redirecting to products…</p>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="page-enter p-6 md:p-8 max-w-3xl mx-auto space-y-5">
+
+      <div>
+        <Link to="/products" className="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-800 transition-colors mb-4">
+          <ArrowLeft size={14} /> Back to products
+        </Link>
+        <p className="text-amber-600 text-xs font-bold uppercase tracking-widest mb-0.5">Inventory</p>
+        <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Syne, sans-serif' }}>Edit product</h1>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-stone-100 p-6 md:p-8">
+
+        {/* Product ID badge */}
+        <div className="bg-stone-50 border border-stone-100 rounded-xl px-4 py-2.5 mb-6">
+          <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider mb-0.5">Product ID</p>
+          <p className="font-mono text-xs text-stone-700">{form.slug}</p>
+        </div>
+
+        {error && (
+          <div className="flex items-start gap-2.5 bg-rose-50 border border-rose-100 rounded-xl px-4 py-3 mb-6 text-sm text-rose-700">
+            <AlertCircle size={15} className="shrink-0 mt-0.5" /> {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <Field label="Product name" htmlFor="name">
+            <input id="name" name="name" type="text" required value={form.name} onChange={onChange} className={input} />
+          </Field>
+
+          <Field label="Description" htmlFor="description">
+            <textarea id="description" name="description" required rows={4} value={form.description} onChange={onChange} className={input} />
+          </Field>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Field label="Price ($)" htmlFor="price">
+              <input id="price" name="price" type="number" required min="0" step="0.01" value={form.price} onChange={onChange} className={input} />
+            </Field>
+            <Field label="Stock qty" htmlFor="quantity">
+              <input id="quantity" name="quantity" type="number" required min="0" step="1" value={form.quantity} onChange={onChange} className={input} />
+            </Field>
+            <Field label="Category" htmlFor="category">
+              <select id="category" name="category" value={form.category} onChange={onChange} className={input}>
+                {['phones','laptops','audio','wearables','cameras'].map((c) => (
+                  <option key={c} value={c}>{c[0].toUpperCase() + c.slice(1)}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
+
+          {/* Image */}
+          <Field label="Product image">
+            {form.featuredImage && (
+              <div className="flex items-center gap-4 bg-stone-50 border border-stone-100 rounded-xl px-4 py-3 mb-3">
+                <div className="h-14 w-14 rounded-lg bg-white border border-stone-100 flex items-center justify-center overflow-hidden">
+                  <img
+                    src={databaseService.getFileView(form.featuredImage)}
+                    alt="Current"
+                    className="h-full w-full object-contain mix-blend-multiply p-1"
+                  />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-stone-700">Current image</p>
+                  <p className="text-xs text-stone-400">Upload a new file to replace it.</p>
+                </div>
+              </div>
+            )}
+            <div className="flex items-center gap-3">
+              <input type="file" name="image" id="image" accept="image/*" className="hidden" onChange={onChange} />
+              <label htmlFor="image"
+                className="inline-flex items-center gap-2 px-4 py-2.5 border border-stone-200 hover:border-stone-400 text-stone-700 rounded-xl text-sm font-semibold cursor-pointer transition-colors">
+                <UploadCloud size={16} /> {form.featuredImage ? 'Change image' : 'Choose file'}
+              </label>
+              {fileName && <span className="text-sm text-stone-500 truncate max-w-xs">{fileName}</span>}
+            </div>
+          </Field>
+
+          {/* Status toggle */}
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <input type="checkbox" id="status" name="status" checked={form.status} onChange={onChange} className="sr-only peer" />
+              <label htmlFor="status"
+                className="flex h-5 w-9 cursor-pointer items-center rounded-full bg-stone-200 peer-checked:bg-amber-400 transition-colors relative">
+                <span className="absolute left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform peer-checked:translate-x-4" />
+              </label>
+            </div>
+            <label htmlFor="status" className="text-sm font-medium text-stone-700 cursor-pointer select-none">
+              Active — visible in store
+            </label>
+          </div>
+
+          <button type="submit" disabled={loading}
+            className="w-full py-3.5 bg-stone-900 hover:bg-stone-800 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-60 shadow-lg shadow-stone-900/15 mt-2">
+            {loading ? <><Loader2 className="animate-spin" size={16} /> Updating…</> : 'Save changes'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
 }
 
 export default EditProduct;
