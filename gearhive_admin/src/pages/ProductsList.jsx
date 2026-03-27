@@ -2,196 +2,167 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import databaseService from '../services/database';
-// Import icons from lucide-react
-import { Plus, Pencil, Trash2 } from 'lucide-react';
-import TempNavbar from '../components/TempNavbar';
+import { Plus, Pencil, Trash2, Package, Loader2 } from 'lucide-react';
 
 function ProductsList() {
-    const [products, setProducts] = useState([]);
-    const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [deleting, setDeleting] = useState(null);
 
-    useEffect(() => {
-        fetchProducts();
-    }, []);
+  useEffect(() => { fetchProducts(); }, []);
 
-    const fetchProducts = async () => {
-        try {
-            const response = await databaseService.getProducts();
-            if (response) {
-                setProducts(response.documents);
-            }
-        } catch (error) {
-            console.error("Error fetching products:", error);
-        } finally {
-            setLoading(false);
-        }
-    };
+  const fetchProducts = async () => {
+    try {
+      const r = await databaseService.getProducts();
+      if (r) setProducts(r.documents);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const handleDelete = async (product) => {
-        const confirmDelete = window.confirm(`Are you sure you want to delete "${product.name}"?`);
-        if (!confirmDelete) return;
+  const handleDelete = async (product) => {
+    if (!window.confirm(`Delete "${product.name}"? This cannot be undone.`)) return;
+    setDeleting(product.$id);
+    try {
+      if (product.featuredImage) await databaseService.deleteFile(product.featuredImage);
+      await databaseService.deleteProduct(product.$id);
+      setProducts((p) => p.filter((x) => x.$id !== product.$id));
+    } catch {
+      alert('Failed to delete product.');
+    } finally {
+      setDeleting(null);
+    }
+  };
 
-        try {
-            if (product.featuredImage) {
-                await databaseService.deleteFile(product.featuredImage);
-            }
-            await databaseService.deleteProduct(product.$id);
-            setProducts((prev) => prev.filter((item) => item.$id !== product.$id));
-        } catch (error) {
-            alert("Failed to delete product");
-        }
-    };
-
-    if (loading) return <div className="flex h-screen items-center justify-center text-gray-500">Loading products...</div>;
-
+  const StockBadge = ({ qty }) => {
+    const n = qty ?? 0;
+    const cls = n > 10 ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+              : n > 0  ? 'bg-amber-50 text-amber-700 border-amber-100'
+                       : 'bg-rose-50 text-rose-700 border-rose-100';
     return (
-        // Main page background
-        <div className="min-h-screen bg-gray-50 pb-8">
-            <TempNavbar />
-            
-            {/* Centered container for main content with padding and margin */}
-            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-8">
-                {/* Main White Card Container */}
-                <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
-                    
-                    {/* Card Header: Title and Add Button */}
-                    <div className="flex flex-col sm:flex-row justify-between items-center p-6 border-b border-gray-200 bg-gray-50/50">
-                        <h2 className="text-xl font-bold text-gray-900 mb-4 sm:mb-0">All Products</h2>
-                        <Link 
-                            to="/add-product" 
-                            className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                        >
-                            <Plus size={16} strokeWidth={2.5} />
-                            <span>Add New Product</span>
-                        </Link>
-                    </div>
-
-                    {/* Table Container */}
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse min-w-200">
-                            {/* Table Header */}
-                            <thead>
-                                <tr className="bg-gray-50 border-b border-gray-200">
-                                    <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Image</th>
-                                    <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</th>
-                                    <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Price</th>
-                                    <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Stock</th>
-                                    <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Category</th>
-                                    <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                                    <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            
-                            {/* Table Body */}
-                            <tbody className="divide-y divide-gray-200 bg-white">
-                                {products.length === 0 ? (
-                                    <tr>
-                                        <td colSpan="7">
-                                            <div className="flex flex-col items-center justify-center p-16 text-center">
-                                                <div className="h-24 w-24 text-gray-200 mb-4">
-                                                    <Plus size={96} strokeWidth={0.5} />
-                                                </div>
-                                                <h3 className="mt-2 text-sm font-medium text-gray-900">No products</h3>
-                                                <p className="mt-1 text-sm text-gray-500">Get started by creating a new product.</p>
-                                                <div className="mt-6">
-                                                    <Link 
-                                                        to="/add-product" 
-                                                        className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm shadow-sm"
-                                                    >
-                                                        <Plus size={16} strokeWidth={2.5} />
-                                                        Add New Product
-                                                    </Link>
-                                                </div>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    products.map((product) => (
-                                        <tr key={product.$id} className="hover:bg-gray-50/50 transition-colors group">
-                                            {/* Image Cell */}
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="h-12 w-12 rounded-lg overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center">
-                                                    <img 
-                                                        src={databaseService.getFileView(product.featuredImage)} 
-                                                        alt={product.name}
-                                                        className="h-full w-full object-cover"
-                                                        onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }}
-                                                    />
-                                                    <span className="text-xs text-gray-400 hidden">No IMG</span>
-                                                </div>
-                                            </td>
-                                            
-                                            {/* Name Cell */}
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm font-medium text-gray-900">{product.name}</div>
-                                            </td>
-                                            
-                                            {/* Price Cell */}
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm font-medium text-gray-900">${product.price ? product.price.toFixed(2) : '0.00'}</div>
-                                            </td>
-                                            
-                                            {/* Stock Cell */}
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                                    (product.quantity || 0) > 10 
-                                                        ? 'bg-green-100 text-green-800'
-                                                        : (product.quantity || 0) > 0
-                                                            ? 'bg-yellow-100 text-yellow-800'
-                                                            : 'bg-red-100 text-red-800'
-                                                }`}>
-                                                    {product.quantity || 0}
-                                                </span>
-                                            </td>
-                                            
-                                            {/* Category Cell */}
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-500 capitalize">{product.category}</div>
-                                            </td>
-                                            
-                                            {/* Status Cell */}
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                                    product.status 
-                                                        ? 'bg-blue-100 text-blue-800'
-                                                        : 'bg-gray-100 text-gray-800'
-                                                }`}>
-                                                    <span className={`w-1.5 h-1.5 mr-1.5 rounded-full ${product.status ? 'bg-blue-600' : 'bg-gray-500'}`}></span>
-                                                    {product.status ? 'Active' : 'Draft'}
-                                                </span>
-                                            </td>
-                                            
-                                            {/* Actions Cell */}
-                                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                {/* FIX: Removed opacity classes so buttons are always visible */}
-                                                <div className="flex items-center justify-end gap-2">
-                                                    <Link 
-                                                        to={`/edit-product/${product.$id}`}
-                                                        className="text-gray-400 hover:text-blue-600 p-1.5 rounded-md hover:bg-blue-50 transition-colors"
-                                                        title="Edit"
-                                                    >
-                                                        <Pencil size={16} strokeWidth={2} />
-                                                    </Link>
-                                                    
-                                                    <button 
-                                                        onClick={() => handleDelete(product)}
-                                                        className="text-gray-400 hover:text-red-600 p-1.5 rounded-md hover:bg-red-50 transition-colors"
-                                                        title="Delete"
-                                                    >
-                                                        <Trash2 size={16} strokeWidth={2} />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
+      <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${cls}`}>
+        {n === 0 ? 'Out of stock' : n}
+      </span>
     );
+  };
+
+  return (
+    <div className="page-enter p-6 md:p-8 max-w-6xl mx-auto space-y-5">
+
+      {/* ── Header ────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <p className="text-amber-600 text-xs font-bold uppercase tracking-widest mb-0.5">Inventory</p>
+          <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Syne, sans-serif' }}>Products</h1>
+        </div>
+        <Link
+          to="/add-product"
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm"
+        >
+          <Plus size={15} strokeWidth={2.5} /> Add product
+        </Link>
+      </div>
+
+      {/* ── Table card ────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-stone-100 overflow-hidden">
+        {loading ? (
+          <div className="py-20 flex flex-col items-center gap-3 text-stone-400">
+            <Loader2 className="animate-spin" size={28} />
+            <p className="text-sm">Loading products…</p>
+          </div>
+        ) : products.length === 0 ? (
+          <div className="py-20 flex flex-col items-center gap-4 text-stone-400">
+            <Package size={48} className="opacity-20" />
+            <div className="text-center">
+              <p className="font-semibold text-stone-700">No products yet</p>
+              <p className="text-sm mt-1">Add your first product to get started.</p>
+            </div>
+            <Link to="/add-product" className="inline-flex items-center gap-2 px-4 py-2.5 bg-stone-900 text-white rounded-xl text-sm font-semibold">
+              <Plus size={14} /> Add product
+            </Link>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-stone-50 border-b border-stone-100">
+                <tr>
+                  {['', 'Product', 'Price', 'Stock', 'Category', 'Status', ''].map((h, i) => (
+                    <th key={i} className="px-5 py-3 text-[11px] font-bold text-stone-400 uppercase tracking-wider whitespace-nowrap">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-50">
+                {products.map((p) => (
+                  <tr key={p.$id} className="group">
+                    {/* Image */}
+                    <td className="pl-5 py-3">
+                      <div className="h-11 w-11 rounded-xl overflow-hidden bg-stone-50 border border-stone-100 flex items-center justify-center">
+                        <img
+                          src={databaseService.getFileView(p.featuredImage)}
+                          alt={p.name}
+                          className="h-full w-full object-contain mix-blend-multiply p-1"
+                          onError={(e) => { e.target.style.display = 'none'; }}
+                        />
+                      </div>
+                    </td>
+                    {/* Name */}
+                    <td className="px-5 py-3">
+                      <p className="font-semibold text-stone-900 leading-snug line-clamp-1">{p.name}</p>
+                      <p className="text-[11px] text-stone-400 font-mono mt-0.5">{p.$id.slice(0, 10)}…</p>
+                    </td>
+                    {/* Price */}
+                    <td className="px-5 py-3 font-semibold text-stone-900">
+                      ${(p.price ?? 0).toFixed(2)}
+                    </td>
+                    {/* Stock */}
+                    <td className="px-5 py-3">
+                      <StockBadge qty={p.quantity} />
+                    </td>
+                    {/* Category */}
+                    <td className="px-5 py-3 text-stone-500 capitalize">{p.category}</td>
+                    {/* Status */}
+                    <td className="px-5 py-3">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border
+                        ${p.status ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-stone-100 text-stone-500 border-stone-200'}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${p.status ? 'bg-emerald-500' : 'bg-stone-400'}`} />
+                        {p.status ? 'Active' : 'Draft'}
+                      </span>
+                    </td>
+                    {/* Actions */}
+                    <td className="px-5 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Link
+                          to={`/edit-product/${p.$id}`}
+                          className="h-8 w-8 flex items-center justify-center rounded-lg text-stone-400 hover:text-amber-700 hover:bg-amber-50 transition-colors"
+                          aria-label={`Edit ${p.name}`}
+                        >
+                          <Pencil size={14} />
+                        </Link>
+                        <button
+                          onClick={() => handleDelete(p)}
+                          disabled={deleting === p.$id}
+                          className="h-8 w-8 flex items-center justify-center rounded-lg text-stone-400 hover:text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-40"
+                          aria-label={`Delete ${p.name}`}
+                        >
+                          {deleting === p.$id
+                            ? <Loader2 size={14} className="animate-spin" />
+                            : <Trash2 size={14} />}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default ProductsList;
